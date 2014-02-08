@@ -1,0 +1,25 @@
+#source{
+  width:1000px;
+  height:500px;
+}
+.examples{
+  float:right;
+  width:400px;
+}
+.examples p span{
+  background: black;
+display: inline-block;
+color: white;
+border-radius: 5px;
+margin: 4px;
+padding: 3px;
+font-family: monospace;
+}
+.sexp_error{
+  border:1px solid red;
+  position:absolute;
+  z-index:4;
+}
+ol.answers {
+  list-style-type: upper-alpha;
+}

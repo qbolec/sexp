@@ -1,0 +1,149 @@
+﻿<!DOCTYPE html>
+<html lang="pl" dir="ltr">
+  <head>
+    <meta http-equiv=​"Content-Type" content=​"text/​html;​ charset=UTF-8">​
+    <link rel="stylesheet" href="bootstrap.min.css"></link>
+    <link rel="stylesheet" href="editor.css"></link>
+  </head>
+  <body>
+    <div role="form">
+      <div class="examples">
+        <label>Przykłady poleceń</label>
+        <p>
+          <span>if 3 > 2 then "pewne" else "dziwne"</span>
+          <span>x -> x*x</span>
+          <span>r -> pi=3.14; 2*pi*r </span>
+          <span>"ala" . " ma" = "ala ma"</span>
+          <span>TeX.fraction(2/3) = "2/3"</span>
+          <span>TeX.fractionP(2/3) = "+2/3"</span>
+          <span>TeX.integer(0.9999) = "1"</span>
+          <span>TeX.float(0.99) = "0.99"</span>
+          <span>min 1 2 = 1</span>
+          <span>max 1 2 = 2</span>
+        </p>
+      </div>
+      <div class="form-group">
+        <label for="source">Szablon treści zadania</label>
+        <div id="source">#Linie zaczynające się od krzyżyka to komentarze dla ludzi, które są ignorowane przez komputer.
+#Chcemy opisać nie jedno zadanie a wiele podobnych do siebie zadań na raz.
+#Dlatego musimy sparametryzować treść zadania, stworzyć szablon.
+#Nasze przykładowe zadanie traktować będzie o rozkładzie wielomianu na czynniki.
+#Te czynniki to bedą (x-p1)(x+p1)(x-p2), więc zadanie zależy od dwóch parametrów p1 i p2.
+#Treść zadania (jako napis) jest więc funkcją tych dwóch parametrów.
+#Dla konkretnych parametrów otrzymujemy konkretną treść.
+#W tym języku programowania funkcję zapisuje się w postaci :  argument -> wartość.
+doKwadratu = x -> x*x;
+#Aby uzyskać coś co zależy od dwóch parametrów używamy funkcji która zwraca funkcję, czyli argument1 -> (argument2 -> wartość).
+
+parametr1 -> parametr2 ->
+  #Niektóre kombinacje parametrów nie mają sensu i możemy wtedy się poddac - system spróbuje użyć innych parametrów aż do skutku
+  if parametr1 = 0 or parametr2 = 0 or parametr1 = parametr2 then
+    raise "Poddaję się - dla takich parametrów zadanie nie jest ciekawe"
+  else
+    #Możemy sobie definiować pomocnicze wartości, których użyjemy później w treści używając notacji  nazwa = wartość ;
+    #Tutaj a2, a1, a0 mają odpowiadać współczynnikom wielomianu stojącym przy x^2, x^1 i x^0.
+    a2 = 0 -parametr2; #unarny minus, powoduje problemy w wyrażeniach takich jak f - x, dlatego piszemy z przodu 0.
+    a1 = 0 -parametr1 * parametr1;
+    a0 = parametr2 * doKwadratu(parametr1);
+    #Gdy piszemy koło siebie współczynniki wielomianu to żeby nie wyglądało to głupio, to
+    #wypada trochę uporządkować zapis. Np. nie wypada pisać "+1x", tylko "+x".
+    #Na pewno niezwykłe byłoby " + -7x".
+    #By to sobie uprościć definiujemy funkcję, która dla zadanego współczynnika i termu który przezeń mnożymy
+    #zwraca ładnie sformatowany fragment tekstu. Np. dla 1 i "x" zwróci "+x".
+    formatuj = a -> term ->
+      if a = 0 then ""  #Dziwnie wyglądałoby "+0x".
+      else if term = "" then TeX.integerP(a) #Z liczby można zrobić napis (ze znakiem z przodu) używając wbudowanej funkcji TeX.integerP
+      else if a = 1 then "+" | term  #Do sklejania napisów używamy pionowej kreski.
+      else if a+1=0 then "-" | term  #Chciałoby się napisać a=-1 ale niestety na razie trzeba pisać inaczej :)
+      else TeX.integerP(a) | term ;
+    #Po ostatnim średniku pojawia się w końcu wartość funkcji, czyli konkretne zadanie: pytanie i 4 odpowiedzi
+    {  #w nawiasach klamrowych możemy tworzyć tzw. "krotki" czyli elemnty iloczynu kartezjańskiego, np. {x:7,y:-8} to punkt
+      question: #pierwszym polem krotki ("wymiarem") jest question, czyli treść pytania, a więc jakiś napis
+        #Możemy używać składni znanej z TeX'a umieszczając wzory pomiędzy dolarami.
+        "Rozwiąż nierówność $x^3 " | (formatuj a2 " x^2 ") | (formatuj a1 " x " ) | ( formatuj a0  "") | " \le 0$.",
+      answers: #drugim elementem krotki są odpowiedzi
+        #Oczywiście miejscami zerowymi naszego wielomianu są parametr1, parametr2 i -parametr1
+        #Musimy tylko ustalić które z nich jest najmniejsze, średnie i największe
+        m0 = parametr1; m1 = parametr2 ; m2 = 0-parametr1 ;
+        x0 = min (min m0 m1) m2 ;
+        x2 = max (max m0 m1) m2 ;
+        x1 = m0+m1+m2-x0-x2;
+        { #oczywiście krotka może zawierać pola które są krotkami. Pole "answers" jest czwórką napisów
+          A : #dla uproszczenia A jest zawsze poprawną odpowiedzią - system zajmie się przetasowaniem przed pokazaniem ich uczniowi
+            "$x \in (-\infty," | TeX.integer(x0) | "] \cup [" | TeX.integer(x1) | "," | TeX.integer(x2) | "]$",
+          B : "$x \in (" | TeX.integer(x0) | "," | TeX.integer(x1) | ") \cup (" | TeX.integer(x2) | "," | "\infty)$",
+          C : "$x \in [" | TeX.integer(x0) | "," | TeX.integer(x1) | "] \cup [" | TeX.integer(x2) | "," | "\infty)$",
+          # warto pewnie zadbać o jakąś fajną zmyłkę, np. poniższa odpowiedź myli współczynniki wielomianu z miejscami zerowymi
+          D:
+            x0 = min (min a0 a1) a2 ; #możemy znów użyć tej samej nazwy zmiennej "x0" - nazwy są "lokalne" i "zasłaniają się"
+            x2 = max (max a0 a1) a2 ;
+            x1 = a0+a1+a2-x0-x2;
+            #Teoretycznie może się pechowo zdarzyć, że odpowiedź D "przez przypadek" będzie poprawna (identyczna jak A).
+            #System sam wykrywa gdy dwie odpowiedzi są dokładnie (co do litery) identyczne i spróbuje użyć innych parametrów.
+            #Przykładowo dzieje się tak dla parametrów 1,-1
+            "$x \in (-\infty," | TeX.integer(x0) | "] \cup [" | TeX.integer(x1) | "," | TeX.integer(x2) | "]$",
+         }
+    }
+
+</div>
+
+
+
+        </div>
+      <div class="form-group">
+        <label for="args">Parametry konkretnego zadania</label>
+        <input type=text class="form-control"  id="args" value="3 , -4">
+        <button class="btn btn-primary" id="randomize">Wylosuj inne parametry</button>
+      </div>
+      <p class="bg-danger" id="error_info">
+
+      </p>
+      <div id="output_info">
+        <div class="form-group" id="resultTeX">
+          <label>Treść konkretnego zadania jako TeX</label>
+          <p class="question"></p>
+          <ol class="answers">
+            <li class="A"></li>
+            <li class="B"></li>
+            <li class="C"></li>
+            <li class="D"></li>
+          </ol>
+        </div>
+        <div class="form-group" id="resultHTML">
+          <label>Treść konkretnego zadania jako HTML</label>
+          <p class="question"></p>
+          <ol class="answers">
+            <li class="A"></li>
+            <li class="B"></li>
+            <li class="C"></li>
+            <li class="D"></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+    <script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+      elements:['jax-math-element'],
+      tex2jax: {
+        displayMath: [ ['$$','$$'] ],
+        inlineMath: [ ['$','$'] ],
+        processEscapes: true
+      },
+      skipStartupTypeset:true,
+      positionToHash:false,
+      messageStyle:"none",
+      showProcessingMessages:false,
+      "HTML-CSS": { availableFonts: ["TeX"] }
+    });
+    </script>
+    <script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_SVG" type="text/javascript"></script>
+    <script src="src-noconflict/ace.js" type="text/javascript"></script>
+    <script src="json2.js" type="text/javascript"></script>
+    <script src="sexp.js" type="text/javascript"></script>
+    <script src="sexp_parser.js" type="text/javascript"></script>
+    <script src="underscore-min.js" type="text/javascript"></script>
+    <script src="mootools.js" type="text/javascript"></script>
+    <script src="tex.js" type="text/javascript"></script>
+    <script src="run.js" type="text/javascript"></script>
+  </body>
+</html>
