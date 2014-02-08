@@ -12,10 +12,11 @@ no type inference algorithm implemented, and all above guarantees rely on it.
 
 However the language itself (as a set of gramar rules and semantics) is designed to support all above statements.
 
-Some of these statements could also be made true by writing run time evaluator of this language, which would
-guard the execution, however the current approach is to convert the code to pure java script and performing eval.
+Some of these statements could also be made true by writing runtime evaluator of this language, which would
+guard the execution, however the current approach is to convert the code to pure javascript and perform single eval call on the output to construct a javascript function equivalent to the user provided script.
 Frankly, for performance reasons (utilizing JIT capabilities of javascript engines) this is quite cool way of doing things,
 and it will be quite safe, too once the type inference step will be performed before execution.
+Also by using foo.toString() you can extract the javascript source code of compiled script which allows even further optimizations.
 
 Motiviting Example
 ------------------
@@ -23,6 +24,11 @@ A motivating example can be found at http://vanisoft.pl/~lopuszanski/public/sexp
 a Teacher can write a small script which generates a LaTeX source of assignment for students based on random seed.
 This example uses an awsome library http://ace.c9.io/ as an editor and www.mathjax.org to render LaTeX.
 This way everything (editing,parsing,executing,rendering) is done client side in a very responsive way.
+
+Thanks
+------
+Big thanks to authors of http://pegjs.majda.cz/online as without their parser this project would not be possible.
+In particular the file sexp_parser.js is generated using it.
 
 Syntax
 ------
@@ -80,3 +86,14 @@ But you can provide extensions (with side effects) to the evaluator yourself:
      });
 
 Be creative, perhaps you could even implemnt try/catch this way!:)
+
+Installation
+------------
+You need json2.js (or any other JSON.stringfiy), underscore.js (or lodash.js), hm.. I think that's it.
+
+If you need to extend the syntax of the language, you may find file syntax.pegjs helpful,
+as with it and the super cool http://pegjs.majda.cz/online project you can generate better version of sexp_parser.js.
+
+If you gonna use http://ace.c9.io/ you may need integration/ace/mode-sexp.js file to support basic syntax highlighting.
+See integration/example/run.js to see how you can tie the editor and parser together to display compile errors etc.
+You can add syntax extra highlighting rules to mode-sexp.js for you external library functions to aid users.
