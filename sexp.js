@@ -74,29 +74,27 @@ var sexp = (function(){
     }*/
   }
 
-
-  function evaluate(js_source, args, lib){
+  function link(js_source, lib){
     var libDefs = [];
     for(name in lib)if(lib.hasOwnProperty(name)){
       libDefs.push('var ' + name + ' = lib["' + name + '"];');
     }
     var wrapped = "(function(){" + libDefs.join('') + " return " + js_source + ";})()";
+
     var foo = eval(wrapped);
-    var result = foo;
-    for(var i=0;i<args.length;++i){
-       result = result.call(null,args[i]);
+    return function(/*...*/){
+      var result = foo;
+      for(var i=0;i<arguments.length;++i){
+         result = result.call(null,arguments[i]);
+      }
+      return result;
     }
-    return result;
-  }
-
-  function registerLibrary(){
-
   }
 
   return {
     parse : parse,
     compile : compile,
-    evaluate : evaluate,
+    link: link,
     getType : getType
   };
 

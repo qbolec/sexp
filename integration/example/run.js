@@ -62,15 +62,15 @@ function run(){
     console.log("Building ast");
     var ast = sexp.parse(editor.getValue());
     console.log("Compiling");
-    var foo = sexp.compile(ast);
-    try{
-      console.log("Evaluating");
-      var task =  sexp.evaluate(foo, $('args').value.split(',').map(function(x){return +x}), {
+    var foo = sexp.link(sexp.compile(ast),{
         'TeX' : Tex,
         'min' : function(a){return function(b){return Math.min(a,b);}},
         'max' : function(a){return function(b){return Math.max(a,b);}},
         'raise' : function(text){throw new UserDefinedException(text);}
-      });
+    });
+    try{
+      console.log("Evaluating");
+      var task =  foo.apply(null,$('args').value.split(',').map(function(x){return +x}));
      _.each(['A','B','C','D'],function(letter1){
        _.each(['A','B','C','D'],function(letter2){
         if(letter1!=letter2 && task.answers[letter1]==task.answers[letter2]){
