@@ -4,16 +4,28 @@ Simple Expressions is a javascript library which aims to allow to execution of u
 Safty guarantees will include restricted access to environment (for example browser cookies), 
 guaranteed success of computation (for example no possiblity of null pointer exception),
 and guaranteed O(1) execution time (no recursion allowed).
-The code looks like this:
+The language is functional and looks like this:
 
-    chart_value =  t ->  
+    t ->  
       uo = users_online(t);
       if uo = 0 then 0
       else
         ca = comments_added(t);
         ca/uo
+
+Which you can convert to folowing javascript using `foo=sexp.link(sexp.compile(sexp.parse(source)),{})` :
+
+    (function (t){
+      return ((function (uo){
+        return (((uo)==(0))?(0):((function (ca){
+          return ((ca)/(uo));
+         })((comments_added)(t))));
+      })((users_online)(t)));
+    })
         
-        
+So you can then call it using `foo(t)`.
+
+
 Warning
 ----------
 This is still work in progress and none of above claims currently holds because currently there is 
@@ -106,3 +118,16 @@ as with it and the super cool http://pegjs.majda.cz/online project you can gener
 If you gonna use http://ace.c9.io/ you may need integration/ace/mode-sexp.js file to support basic syntax highlighting.
 See integration/example/run.js to see how you can tie the editor and parser together to display compile errors etc.
 You can add syntax extra highlighting rules to mode-sexp.js for you external library functions to aid users.
+
+
+Usage
+-----
+There are several steps involved in executing your script.
+This is to give you a chance to save intermediate results of transformations to optimize repetitive execution of the same script.
+These steps are:
+
+* sexp.parse(sexp_source) which returns abstract syntax tree 
+* sexp.compile(ast) which returns javascript source equivalent to the original sexp source
+* sexp.link(js_source, library) which makes functions defined in library visible to the script and returns a callable function. 
+ 
+The function returned by sexp.link accepts arbitrary number of arguments and applies them one by one.
