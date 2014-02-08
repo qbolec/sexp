@@ -1,10 +1,19 @@
 sexp
 ====
-Simple Expressions is a javascript library which aims to allow to execution untrusted code in a safe way.
+Simple Expressions is a javascript library which aims to allow to execution of untrusted code in a safe way.
 Safty guarantees will include restricted access to environment (for example browser cookies), 
 guaranteed success of computation (for example no possiblity of null pointer exception),
 and guaranteed O(1) execution time (no recursion allowed).
+The code looks like this:
 
+    chart_value =  t ->  
+      uo = users_online(t);
+      if uo = 0 then 0
+      else
+        ca = comments_added(t);
+        ca/uo
+        
+        
 Warning
 ----------
 This is still work in progress and none of above claims currently holds because currently there is 
