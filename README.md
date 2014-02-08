@@ -26,20 +26,24 @@ This way everything (editing,parsing,executing,rendering) is done client side in
 
 Syntax
 ------
-EXP = 
-  STRING | #currently slashes there are no escape sequences so there is no way to type "
-  NUMBER | #currently only integers
-  TUPPLE | 
-  IDENTIFIER |
-  EXP OPERATOR EXP | #operators include <,<=,=,=>,>,and,or,not,+,-,/,%,*,|
-  EXP EXP | #application does not require ()
-  IDENTIFIER -> EXP | #function definition
-  if EXP then EXP else EXP | 
-  IDENTIFIER = EXP ; EXP | #this is "let" and currently is translated to imeddiate application
-  EXP . IDENTIFIER  #this is field extraction
-  
-TUPPLE = { FIELD* }
-FIELD = IDENTIFIER : EXP ,  #the last comma is optional
+I hope I do not have to elaborate more than:
+
+    EXP = 
+      STRING | #currently slashes there are no escape sequences so there is no way to type "
+      NUMBER | #currently only integers
+      TUPPLE | 
+      IDENTIFIER |
+      EXP OPERATOR EXP | #operators include <,<=,=,=>,>,and,or,not,+,-,/,%,*,|
+      EXP EXP | #application does not require ()
+      IDENTIFIER -> EXP | #function definition
+      if EXP then EXP else EXP | 
+      IDENTIFIER = EXP ; EXP | #this is "let" and currently is translated to imeddiate application
+      EXP . IDENTIFIER  #this is field extraction
+      
+    TUPPLE = { FIELD* }
+    FIELD = IDENTIFIER : EXP ,  #the last comma is optional
+
+You can write comments using #. You can add round brackets to enforce operator precedence.
 
 External Bindings
 -----------------
