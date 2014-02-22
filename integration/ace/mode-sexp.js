@@ -30,7 +30,7 @@ var TextHighlightRules = require("./text_highlight_rules").TextHighlightRules;
 
 var SexpHighlightRules = function() {
     var keywordControl = "if|else|then";
-    var keywordOperator = "not|and|or";
+    var keywordOperator = "not|and|or|div|mod";
     var supportFunctions = "integerP|integer|floatP|float|fractionP|fraction|min|max|TeX|raise";
 
     var keywordMapper = this.createKeywordMapper({
@@ -49,6 +49,10 @@ var SexpHighlightRules = function() {
         {
             token : "constant.numeric",
             regex : "[+-]?\\d+\\b"
+        },
+        {
+            token : "constant.language.boolean",
+            regex : "(true|false)\\b"
         },
         {
             token : "keyword.operator",
