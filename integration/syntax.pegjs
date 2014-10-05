@@ -171,7 +171,8 @@ factor
   }
 
 literal
-  = integer
+  = float
+  / integer
   / string
   / boolean
 
@@ -256,6 +257,8 @@ boolean
 string
   = str:(["][^"]*["]) {return str[1].join("");}
 
+float
+  = digits:([0-9]+[.][0-9]+)  { return parseFloat(digits[0].join("")+'.'+digits[2].join(""), 10); }
 integer "integer"
   = digits:[0-9]+ { return parseInt(digits.join(""), 10); }
 
