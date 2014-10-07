@@ -110,7 +110,7 @@ atom
       end: offset()+text().length
     }
   }
-  / left:sum _ op:comparison_op _ right:sum {
+  / left:infix_calls _ op:comparison_op _ right:infix_calls {
     return {
       type:"operator",
       op:op,
@@ -119,7 +119,29 @@ atom
       end: offset()+text().length
     };
   }
-  / sum
+  / infix_calls
+
+infix_calls
+  = first:sum others:(_ infix_function _ sum)* {
+    var res = first;
+    for(var i=0;i<others.length;++i){
+      res = {
+        type:"apply",
+        foo: {
+          type:"apply",
+          foo:others[i][1],
+          arg : res,
+          start : res.start,
+          end : others[i][1].end
+        },
+        arg : others[i][3],
+        start : res.start,
+        end : others[i][3].end
+      };
+
+    }
+    return res;
+  }
 
 sum
   = first:product others:(_ additive_op _ product)* {
@@ -248,6 +270,10 @@ multiplicative_op
 
 additive_op
   = [-+|]
+
+infix_function
+  = "`" foo:factor "`" {return foo;}
+  
 
 boolean
   = "true" {return true;}
