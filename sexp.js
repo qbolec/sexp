@@ -39,7 +39,7 @@ var sexp = (function(){
     this.type = 'tupple';
     me.fields = {};
     forKeyVal(fieldToType,function(t,f){
-      me.fields['F_' + f] = t;
+      me.fields[f] = t;
     });
   }
   TuppleType.prototype.toString = function(){
@@ -53,15 +53,13 @@ var sexp = (function(){
     return s;
   }
   TuppleType.prototype.hasField = function(k){
-    return ('F_' + k) in this.fields;
+    return this.fields.hasOwnProperty(k);
   };
   TuppleType.prototype.getField = function(k){
-    return this.fields['F_'+k];
+    return this.fields[k];
   };
   TuppleType.prototype.forTypeField = function(f){
-    forKeyVal(this.fields,function(t,k){
-      f(t,k.substr(2));
-    });
+    forKeyVal(this.fields,f);
   };
 
   function Env(){
@@ -95,25 +93,44 @@ var sexp = (function(){
   Equations.prototype.getFreeQuantifiedType = function() {
     return new QuantifiedType(this.freeVariableId++);
   };
-  Equations.prototype.applyTo = function(e){
+  Equations.prototype.getLowerBound = function(e){
     var me=this;
     switch(e.type){
       case '->':
-        return new FunctionType(this.applyTo(e.from), this.applyTo(e.to));
+        return new FunctionType(this.getUpperBound(e.from), this.getLowerBound(e.to));
       case 'tupple':
         var fields={};
         e.forTypeField(function(t,f){
-          fields[f] = me.applyTo(t);
+          fields[f] = me.getLowerBound(t);
         });
         return new TuppleType(fields);
       case 'quantified':
-        return (e.id in this.assignment) ? this.applyTo(this.assignment[e.id]) : e;
+        return (e.id in this.assignment) ? this.getLowerBound(this.assignment[e.id]) : e;
       case 'base':
         return e;
       default:
         throw new Error('wtf unhandled type kind ' + e.type);
     }
   };
+  Equations.prototype.getUpperBound = function(e){
+    var me=this;
+    switch(e.type){
+      case '->':
+        return new FunctionType(this.getLowerBound(e.from), this.getUpperBound(e.to));
+      case 'tupple':
+        var fields={};
+        e.forTypeField(function(t,f){
+          fields[f] = me.getUpperBound(t);
+        });
+        return new TuppleType(fields);
+      case 'quantified':
+      case 'base':
+        return e;
+      default:
+        throw new Error('wtf unhandled type kind ' + e.type);
+    }
+  };
+
   Equations.prototype.smallestTypeLargerThan = function(t1,t2){
     var me=this;
     if(t1.type == t2.type){
@@ -229,7 +246,7 @@ var sexp = (function(){
         });
         return !!contains;
       case 'quantified':
-        //TODO :  should I recurse into this.applyTo(e)?
+        //TODO :  should I recurse into this.getLowerBound(e)?
         return e.id == id;
       case 'base':
         return false;
@@ -251,45 +268,44 @@ var sexp = (function(){
     throw err;
   }
   Inequality.prototype.satisfy = function(equations){
-    var lowerBoundOfNarrower = equations.applyTo(this.narrower);
-    var lowerBoundOfWider = equations.applyTo(this.wider);
+    var lowerBoundOfNarrower = equations.getLowerBound(this.narrower);
+    var lowerBoundOfWider = equations.getLowerBound(this.wider);
     var me = this;
+    var changed = false;
+    //functions are contra-/co-variant which introduces some difficulties in handling them properly
+    if(this.wider.type == '->' && lowerBoundOfNarrower.type == '->'){
+      changed = (new Inequality(this.wider.from,lowerBoundOfNarrower.from,this.source)).satisfy(equations);
+    }
+
     if(lowerBoundOfNarrower.type == this.wider.type){
       switch(lowerBoundOfNarrower.type){
         case 'quantified':
-          return false;
+          return changed;
         case 'tupple':
           me.wider.forTypeField(function(t,f){
             if(!lowerBoundOfNarrower.hasField(f)){
               me.fail(', which requires ' + lowerBoundOfNarrower + ' <= ' + me.wider + '. Missing field ' + f + '.');
             }
           });
-          var c=false;
           me.wider.forTypeField(function(t,f){
-            c|= (new Inequality(lowerBoundOfNarrower.getField(f),t,this.source)).satisfy(equations);
+            changed|= (new Inequality(lowerBoundOfNarrower.getField(f),t,me.source)).satisfy(equations);
           });
-          return !!c;
+          return !!changed;
         case '->':
           //  narrower  <= wider              I can use narrower in place of wider ...
           //  narrower.to <= wider.to         as long as it won't return unexpected result ...
           //  wider.from  <= narrower.from    and accepts all reasonable inputs.
-          var c = (me.narrower.type == '->' ? (new Inequality(lowerBoundOfWider.from,me.narrower.from,this.source)).satisfy(equations) : false);
-              c|= (new Inequality(lowerBoundOfNarrower.to,me.wider.to,this.source)).satisfy(equations);
-          return !!c;
+          changed|= (new Inequality(lowerBoundOfNarrower.to,me.wider.to,this.source)).satisfy(equations);
+          return !!changed;
         case 'base':
           if(equations.smallestTypeLargerThan(lowerBoundOfNarrower,this.wider).name != this.wider.name){
             this.fail(', which requires ' + lowerBoundOfNarrower + ' <= ' + me.wider + '.');
           }
-          return false;
+          return changed;
         default:
           throw new Error('wtf unhandled type kind ' + e.type);
       }
     }else{
-      var changed = false;
-      //functions are contra-/co-variant which introduces some difficulties in handling them properly
-      if(lowerBoundOfWider.type == '->' && this.narrower.type == '->'){
-        changed = (new Inequality(lowerBoundOfWider.from,me.narrower.from,this.source)).satisfy(equations);
-      }
       switch(me.wider.type){
         case 'quantified':
           if(equations.contains(me.wider.id,lowerBoundOfNarrower)){
@@ -355,7 +371,7 @@ var sexp = (function(){
     var equations = new Equations();
     var t = getType(ast,env,equations);
     equations.solve();
-    return equations.applyTo(t);
+    return equations.getLowerBound(t);
   }
   function getType(ast, env, equations){
     switch(ast.type){
@@ -406,10 +422,10 @@ var sexp = (function(){
         var argType = getType(ast.arg,env,equations);
         var toType = equations.getFreeQuantifiedType();
         var fromType = equations.getFreeQuantifiedType();
-        var functionalTypeShape = new FunctionType( fromType,  toType );
-        equations.addConstraint(new Inequality(argType, fromType,ast));
-        equations.addConstraint(new Inequality(functionalTypeShape, fooType,ast));
+        var functionalTypeShape = new FunctionType(fromType,toType);
+        equations.addConstraint(new Inequality(argType,fromType,ast));
         equations.addConstraint(new Inequality(fooType,functionalTypeShape,ast));
+        equations.addConstraint(new Inequality(functionalTypeShape,fooType,ast));
         return toType;
       case 'var':
         if(!env.contains(ast.name)){
