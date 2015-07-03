@@ -481,7 +481,11 @@ var sexp = (function(){
           'mod' : '%',
           'div' : '/'
         };
-        return (ast.op == 'div' ? 'Math.floor(' : '(' ) + compile(ast.args[0])  + (binary_operators.hasOwnProperty(ast.op) ? binary_operators[ast.op]  : ast.op)  + compile(ast.args[1]) + ')';
+        var code= '(' + compile(ast.args[0])  + (binary_operators.hasOwnProperty(ast.op) ? binary_operators[ast.op]  : ast.op)  + compile(ast.args[1]) + ')';
+        if (ast.op === 'div'){
+          code = '(Math.floor' + code + ')';
+        }
+        return code;
       case 'apply':
         return '(' + compile(ast.foo) +  compile(ast.arg)  +')';
       case 'var':
