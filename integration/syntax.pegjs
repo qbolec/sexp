@@ -289,7 +289,7 @@ integer "integer"
   = digits:[0-9]+ { return parseInt(digits.join(""), 10); }
 
 identifier
-  = !keyword chars:([_a-zA-Z][a-zA-Z0-9_]*) {
+  = !(keyword (!. / [^a-zA-Z0-9_])) chars:([_a-zA-Z][a-zA-Z0-9_]*) {
     return {
       name: chars[0]+chars[1].join(""),
       start: offset(),
