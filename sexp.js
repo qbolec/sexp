@@ -12,9 +12,7 @@ var sexp = (function(){
     return 'a' + this.id;
   }
   function BottomType(){
-    //TODO
-    this.type = 'quantified';
-    this.id = -1; //XXX
+    this.type = 'bottom';
   }
   BottomType.prototype.toString = function(){
     return '_bottom_';
@@ -84,7 +82,9 @@ var sexp = (function(){
 
   function Equations(){
     this.constraints = [];
-    this.assignment = {};
+    this.variableLowerBound = {};
+    this.variableUpperBound = {};
+
     this.freeVariableId = 0;
   }
   Equations.prototype.addConstraint=function(c){
@@ -96,6 +96,8 @@ var sexp = (function(){
   Equations.prototype.getLowerBound = function(e){
     var me=this;
     switch(e.type){
+      case 'bottom':
+        return e;
       case '->':
         return new FunctionType(this.getUpperBound(e.from), this.getLowerBound(e.to));
       case 'tupple':
@@ -105,7 +107,7 @@ var sexp = (function(){
         });
         return new TuppleType(fields);
       case 'quantified':
-        return (e.id in this.assignment) ? this.getLowerBound(this.assignment[e.id]) : e;
+        return (e.id in this.variableLowerBound) ? this.getLowerBound(this.variableLowerBound[e.id]) : e;
       case 'base':
         return e;
       default:
@@ -115,6 +117,8 @@ var sexp = (function(){
   Equations.prototype.getUpperBound = function(e){
     var me=this;
     switch(e.type){
+      case 'bottom':
+        return e;
       case '->':
         return new FunctionType(this.getLowerBound(e.from), this.getUpperBound(e.to));
       case 'tupple':
@@ -124,6 +128,7 @@ var sexp = (function(){
         });
         return new TuppleType(fields);
       case 'quantified':
+        return (e.id in this.variableUpperBound) ? this.getUpperBound(this.variableUpperBound[e.id]) : e;
       case 'base':
         return e;
       default:
@@ -135,6 +140,8 @@ var sexp = (function(){
     var me=this;
     if(t1.type == t2.type){
       switch(t1.type){
+        case 'bottom':
+          return t1;
         case '->':
           // smallestTypeLargerThan === minimal among (larger than t1 and larger than t2)
           // "larger than t1" means that "to" is larger than "t1.to"
@@ -157,17 +164,15 @@ var sexp = (function(){
         case 'base':
           if(t1.name != t2.name){
             return new BaseType('scalar');
-
-            throw new TypeError('Failed to infere type : ' + (t1) + ' vs. ' + (t2) );
           }
           return t1;
         default:
           throw new Error('wtf unhandled type kind ' + t1.type);
       }
     }else{
-      if(t1.type == 'quantified'){
+      if(t1.type == 'quantified' || t1.type == 'bottom'){
         return t2;
-      }else if(t2.type == 'quantified'){
+      }else if(t2.type == 'quantified' || t2.type == 'bottom'){
         return t1;
       }else{
         throw new TypeError('Failed to infere type : ' + (t1) + ' vs. ' + (t2) );
@@ -178,6 +183,8 @@ var sexp = (function(){
     var me=this;
     if(t1.type == t2.type){
       switch(t1.type){
+        case 'bottom':
+          return t1;
         case '->':
           // largestTypeSmallerThan === maximal among (smaller than t1 and smaller than t2)
           // "smaller than t1" means that "to" is smaller than "t1.to"
@@ -203,7 +210,11 @@ var sexp = (function(){
           //perhaps I should create new variable and two new inequalities?
           return t1;
         case 'base':
-          if(t1.name != t2.name){
+          if(t1.name == 'scalar'){
+            return t2;
+          }else if(t2.name == 'scalar'){
+            return t1;
+          }else if(t1.name != t2.name){
             throw new TypeError('Failed to infere type : ' + (t1) + ' vs. ' + (t2) );
           }
           return t1;
@@ -211,7 +222,11 @@ var sexp = (function(){
           throw new Error('wtf unhandled type kind ' + t1.type);
       }
     }else{
-      if(t1.type == 'quantified'){
+      if(t1.type == 'bottom'){
+        return t1;
+      }else if(t2.type == 'bottom'){
+        return t2;
+      }else if(t1.type == 'quantified'){
         return t2;
       }else if(t2.type == 'quantified'){
         return t1;
@@ -221,22 +236,38 @@ var sexp = (function(){
     }
   }
   Equations.prototype.bumpVariable = function(id,e){
-    if(id in this.assignment){
-      var new_type = this.smallestTypeLargerThan(this.assignment[id],e);
-      if(new_type.toString() != this.assignment[id].toString()){ //I am so lazy...
-        this.assignment[id] = new_type;
+    if(id in this.variableLowerBound){
+      var new_type = this.smallestTypeLargerThan(this.variableLowerBound[id],e);
+      if(new_type.toString() != this.variableLowerBound[id].toString()){ //I am so lazy...
+        this.variableLowerBound[id] = new_type;
         return true;
       }else{
         return false;
       }
     }else{
-      this.assignment[id] = e;
+      this.variableLowerBound[id] = e;
+      return true;
+    }
+  };
+  Equations.prototype.limitVariable = function(id,e){
+    if(id in this.variableUpperBound){
+      var new_type = this.largestTypeSmallerThan(this.variableUpperBound[id],e);
+      if(new_type.toString() != this.variableUpperBound[id].toString()){ //I am so lazy...
+        this.variableUpperBound[id] = new_type;
+        return true;
+      }else{
+        return false;
+      }
+    }else{
+      this.variableUpperBound[id] = e;
       return true;
     }
   };
   Equations.prototype.contains = function(id,e){
     var me = this;
     switch(e.type){
+      case 'bottom':
+        return false;
       case '->':
         return this.contains(id,e.from) || this.contains(id,e.to);
       case 'tupple':
@@ -269,63 +300,76 @@ var sexp = (function(){
   }
   Inequality.prototype.satisfy = function(equations){
     var lowerBoundOfNarrower = equations.getLowerBound(this.narrower);
-    var lowerBoundOfWider = equations.getLowerBound(this.wider);
+    var upperBoundOfWider = equations.getUpperBound(this.wider);
     var me = this;
     var changed = false;
-    //functions are contra-/co-variant which introduces some difficulties in handling them properly
-    if(this.wider.type == '->' && lowerBoundOfNarrower.type == '->'){
-      changed = (new Inequality(this.wider.from,lowerBoundOfNarrower.from,this.source)).satisfy(equations);
+    if(me.narrower.type === 'quantified'){
+      if(upperBoundOfWider.type !== 'quantified'){
+        if(equations.contains(me.narrower.id,upperBoundOfWider)){
+          me.fail(', which requires recursive type as ' + me.narrower + ' occurs inside ' + upperBoundOfWider + '.');
+        }
+        try{
+          changed |= equations.limitVariable(me.narrower.id,upperBoundOfWider);
+        }catch(e){
+          me.fail(', as forcing ' + me.narrower + ' to be <= ' + upperBoundOfWider + ' leads to ' + e.toString() + '.');
+        }
+      }
+      if(lowerBoundOfNarrower.toString()!=me.narrower.toString()){
+        changed|= (new Inequality(lowerBoundOfNarrower,me.wider,me.source)).satisfy(equations);
+      }
     }
-
-    if(lowerBoundOfNarrower.type == this.wider.type){
-      switch(lowerBoundOfNarrower.type){
+    if(me.wider.type === 'quantified'){
+      if(lowerBoundOfNarrower.type !== 'quantified'){
+        if(equations.contains(me.wider.id,lowerBoundOfNarrower)){
+          me.fail(', which requires recursive type as ' + me.wider + ' occurs inside ' + lowerBoundOfNarrower + '.');
+        }
+        try{
+          changed |= equations.bumpVariable(me.wider.id,lowerBoundOfNarrower);
+        }catch(e){
+          me.fail(', as forcing ' + me.wider + ' to be >= ' + lowerBoundOfNarrower + ' leads to ' + e.toString() + '.');
+        }
+      }
+      if(upperBoundOfWider.toString()!=me.wider.toString()){
+        changed|= (new Inequality(me.narrower,upperBoundOfWider,me.source)).satisfy(equations);
+      }
+    }
+    if(me.narrower.type == me.wider.type){
+      switch(me.narrower.type){
+        case 'bottom':
+          return changed;
         case 'quantified':
           return changed;
         case 'tupple':
           me.wider.forTypeField(function(t,f){
-            if(!lowerBoundOfNarrower.hasField(f)){
-              me.fail(', which requires ' + lowerBoundOfNarrower + ' <= ' + me.wider + '. Missing field ' + f + '.');
+            if(!me.narrower.hasField(f)){
+              me.fail(', which requires ' + me.narrower + ' <= ' + me.wider + '. Missing field ' + f + '.');
             }
           });
           me.wider.forTypeField(function(t,f){
-            changed|= (new Inequality(lowerBoundOfNarrower.getField(f),t,me.source)).satisfy(equations);
+            changed|= (new Inequality(me.narrower.getField(f),t,me.source)).satisfy(equations);
           });
           return !!changed;
         case '->':
           //  narrower  <= wider              I can use narrower in place of wider ...
           //  narrower.to <= wider.to         as long as it won't return unexpected result ...
           //  wider.from  <= narrower.from    and accepts all reasonable inputs.
-          changed|= (new Inequality(lowerBoundOfNarrower.to,me.wider.to,this.source)).satisfy(equations);
+          changed|= (new Inequality(me.narrower.to,me.wider.to,me.source)).satisfy(equations);
+          changed|= (new Inequality(me.wider.from,me.narrower.from,me.source)).satisfy(equations);
           return !!changed;
         case 'base':
-          if(equations.smallestTypeLargerThan(lowerBoundOfNarrower,this.wider).name != this.wider.name){
-            this.fail(', which requires ' + lowerBoundOfNarrower + ' <= ' + me.wider + '.');
+          if(equations.smallestTypeLargerThan(me.narrower,me.wider).name != me.wider.name){
+            me.fail(', which requires ' + me.narrower + ' <= ' + me.wider + '.');
           }
           return changed;
         default:
           throw new Error('wtf unhandled type kind ' + e.type);
       }
     }else{
-      switch(me.wider.type){
-        case 'quantified':
-          if(equations.contains(me.wider.id,lowerBoundOfNarrower)){
-            this.fail(', which requires recursive type as ' +  me.wider + ' occurs inside ' + lowerBoundOfNarrower + '.');
-          }
-          try{
-            return equations.bumpVariable(me.wider.id,lowerBoundOfNarrower) || changed;
-          }catch(e){
-            this.fail(', as forcing ' + me.wider + ' to be >= ' + lowerBoundOfNarrower + ' from previous ' + lowerBoundOfWider +' leads to ' + e.toString() + '.');
-          }
-        case '->':
-        case 'base':
-        case 'tupple':
-          if(lowerBoundOfNarrower.type!='quantified'){
-            this.fail(', which requires ' + lowerBoundOfNarrower + ' <= ' + me.wider + ' which are incompatible types.');
-          }
-          return changed;
-        default:
-          throw new Error('wtf unhandled type kind ' + e.type);
+      if(me.wider.type !== 'quantified' && me.narrower.type !== 'quantified' && me.narrower.type !== 'bottom'){
+        //tupple, ->, base   <= bottom, tupple, ->, base
+        me.fail(', which requires ' + me.narrower + ' <= ' + me.wider + ' which are incompatible types.');
       }
+      return changed;
     }
   }
   Equations.prototype.solve = function(){
