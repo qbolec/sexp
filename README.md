@@ -33,7 +33,7 @@ This is still work in progress and none of above claims currently holds because 
 However the language itself (as a set of gramar rules and semantics) is designed to support all above statements.
 
 Some of these statements could also be made true by writing runtime evaluator of this language, which would
-guard the execution, however the current approach is to convert the code to pure javascript and perform single eval call on the output to construct a javascript function equivalent to the user provided script.
+guard the execution, however the current approach is to convert the code to pure javascript and perform single `eval()` call on the output to construct a javascript function equivalent to the user provided script.
 Frankly, for performance reasons (utilizing JIT capabilities of javascript engines) this is quite cool way of doing things,
 and it will be quite safe, too once the type inference step will be performed before execution.
 Also by using foo.toString() you can extract the javascript source code of compiled script which allows even further optimizations.
@@ -49,14 +49,15 @@ Thanks
 ------
 Big thanks to authors of http://pegjs.majda.cz/online as without their parser this project would not be possible.
 In particular the file sexp_parser.js is generated using it.
+Thanks to Didier Rémy, the author of [Type Inference for Records in a Natural Extension of ML](https://www.cs.cmu.edu/~aldrich/courses/819/row.pdf), which inspired the current version of type inference.
 
 Syntax
 ------
 I hope I do not have to elaborate more than:
 
     EXP = 
-      STRING | #currently slashes there are no escape sequences so there is no way to type "
-      NUMBER | #currently only integers
+      STRING | #currently there are no escape sequences so there is no way to express character "
+      NUMBER | #currently only integers and floats writen in fixed point notation
       TUPPLE | 
       IDENTIFIER |
       EXP OPERATOR EXP | #operators include <,<=,=,=>,>,and,or,+,-,/,%,*,| (as concatenation), mod, div
@@ -64,13 +65,14 @@ I hope I do not have to elaborate more than:
       EXP EXP | #application does not require ()
       IDENTIFIER -> EXP | #function definition
       if EXP then EXP else EXP | 
-      IDENTIFIER = EXP ; EXP | #this is "let" and currently is translated to imeddiate application
+      IDENTIFIER = EXP ; EXP | #this is a polymorphic, non-recursive "let" 
       EXP . IDENTIFIER  #this is field extraction
       
     TUPPLE = { FIELD* }
     FIELD = IDENTIFIER : EXP ,  #the last comma is optional
 
 You can write comments using #. You can add round brackets to enforce operator precedence.
+For details of syntax refer to [syntax.pegjs](https://github.com/qbolec/sexp/blob/master/integration/syntax.pegjs).
 
 External Bindings
 -----------------
@@ -109,7 +111,7 @@ Be creative, perhaps you could even implemnt try/catch this way!:)
 
 Installation
 ------------
-You need json2.js (or any other JSON.stringfiy), underscore.js (or lodash.js), hm.. I think that's it.
+You need json2.js (or any other JSON.stringfiy).
 
 If you need to extend the syntax of the language, you may find file syntax.pegjs helpful,
 as with it and the super cool http://pegjs.majda.cz/online project you can generate better version of sexp_parser.js.
@@ -167,26 +169,32 @@ For example :
           'min' : numberToNumberToNumber,
           'max' : numberToNumberToNumber,
       }),
-      'raise' : new sexp.FunctionType(new sexp.BaseType('string'),bottom),
+      'raise' : new sexp.QuantifiedType('any', new sexp.FunctionType(new sexp.BaseType('string'),new VariableType('any'))),
     }));
 
 As you can see, sexp.BaseType, sexp.FunctionType and sexp.TuppleType are used to build types inside libTypes.
-The special sexp.BottomType type is used for `raise` raise return value, as `raise` never returns.
-The returned `type` is also built of the same components: BaseType, FunctionType, TuppleType and BottomType, but it can ocassionally contain QuantifiedType if there is not much the algorithm can tell about a variable.
-All types have `toString` method implemented so you can easily debug the type.
-All types have `type` field which is either `"quantified"`,`"base"`,`"->"`,or `"tupple"`. (Currently bottom is just a quantified variable, sorry about that).
+The special sexp.QuantifiedType and sexp.VariableType can be used to build polymorphic types.
+Please note, that a field of a tupple CAN NOT be a polymorphic function, but a type of the whole tupple can be polymorphic.
+In the above example the symbol 'raise' is defined to have the type '\forall any . string -> any', which makes it possible to use this function in many different contexts.
 
-The inference algorithm used is quite simple: it builds a list of "type inequalities" and tries to find assignment of types to subexpressions which satisfies all these inequalities by starting from assigning BottomType to all of them and then gradually "bumping up" the types as to satisfy each unsatisied constraint.
-Either a fixed point is found, or the algorithm throws `TypeError` with an error (which has a nice `toString` method and `source` field which points to the `ast` node which triggered the inequality which can not be satisifed).
+The returned `type` is also built of the same components: BaseType, FunctionType, and TuppleType, and it can ocassionally contain QuantifiedType and VariableType if the expression has a polymorphic type.
+All types have a `toString` method implemented so you can easily debug the type.
+All types have a `type` field which is either `"base"`,`"->"`,`"tupple"`, `"quantified"`,or `"variable"`.
 
-Actually it is perhaps possible that the algorithm will stuck in an endless loop (I am not sure) in case of some nasty tupples inequalities. 
+The inference algorithm used is a variation of Algorithm W, as suggested in [Type Inference for Records in a Natural Extension of ML](https://www.cs.cmu.edu/~aldrich/courses/819/row.pdf) by Didier Rémy.
+It traverses the abstract syntax tree of the parsed expression stating assertions about type equalities, extending the environment (a mapping of symbol names to their types) and building the resulting type term.
+Equalities between two types decomposed into equalities between type variables and handled using union-find.
+The only non-standard thing inspired by the algorithm of Didier Rémy is to extend the meaning of equality for tupples so that the order of fields is commutative - this small change makes it easier to treat tupples as (openended) list's of fields which is suitable for matching.
 
-The types are monomorphic (currently), which means that the each subexpression (including user defined functions) will be assigned exactly one type, so function like `a -> b -> c if c then a else b` can not be used in a same program for numbers and for tupples. 
-The only polymorphic thing right now is `=` operator which allows you to compare two strings, or two numbers.
-And BottomType which can be "unified" with any other type which allows one to write things like `if c then raise "a" else 7`. 
-In future I would love to add full fledged polymorphism, but it is to hard for me right now to combine it with type inequalities, and I need type inequalities for tupples, so that when you write `magnitude = p -> p.x*p.x +p.y*p.y` you can safely use that function for `magnitude {x:1,y:2}` but also for `magnitude {x:1,y:2,label:"green"}`.
+If equalities can not be satisfied (for example due to recursion) a TypeException is thrown, and it contains information about particular location in code which caused the violation (this can be useful for syntax highlighting).
+The algorithm can also throw Exception if some other problem occured.
 
-The downside of using "fixedpoint algorithm" based on "lower bound inequalities" is that sometimes the algorithm can not tell anything interesting about the type of a function. For example the function `x -> x*x` "obviously requires x to be a number" but for my algorithm it merely "requires x to be at most a number", and since it reports the lowest possible fixed point it will report `"a0->number"` as the type of this function. However it will correctly report a type error once you try to actually pass something which is not a number to such a function, for example `(x -> x*x) "bla")` will throw TypeError as type of `"bla"`, which is `string` will become a lowerbound for the type of `x`, and will lead to unsatisfiable inequality `string<number`.
+The `x=y;b` syntax defines `x` to be equal `y` in expression `b`, and is treated as a polymorphic declaration.
+In particular `compare = p1 -> p2 -> if p1.x=p2.x then p1 else p2; ...` can be used both for 2-D points and 3-D points in the same expression. This example also shows how row polymorphism can help achieve similar results to subtyping - the function accepts any records which have field `x` which is comparable (so it can be `number` or `string` or `boolean`).
+The `=` operator is polymorphic and accpepts any BaseType arguments, as long as both of them have the same type.
+This can lead to some cryptic error messages in cases where the exact type of arguments can not be further narrowed down, as the algorithm can correctly infere that both arguments must be `base(alpha)` but has no way of expressing it as a Type. 
+This is perhaps a bad design of the API..sorry.
+You can work around it by writing code which inposes more restrictions on variables - for example to force both compared operands to be `number` you can add `or a=0 and a=1` somewhere.
 
-To overcome this, if you know what will be the types of arguments passed to the program you can "augment" the ast tree by adding extra `{type:"apply",foo:...,arg:..}` nodes on top of the root before calling `sexp.infereType(ast,..)`, as to simulate application of these arguments and only then run the type inference. Alternatively you can wrap the `source` with `"("+source+") 1 "bla" 2"` before runining `sexp.parse`.
+Another way to overcome this, if you know what will be the types of arguments passed to the program you can "augment" the ast tree by adding extra `{type:"apply",foo:...,arg:..}` nodes on top of the root before calling `sexp.infereType(ast,..)`, as to simulate application of these arguments and only then run the type inference. Alternatively you can wrap the `source` with `"("+source+") 1 "bla" 2"` before runining `sexp.parse`.
 
